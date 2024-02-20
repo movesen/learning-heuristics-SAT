@@ -5,4 +5,4 @@ This repository provides three different implementations of Reinforcement Learni
 Included:
   1. Actor Critic algorithm
   2. Experience Replay implementation
-  3. REINFORCE algorithm, originally implemented by @yanneta
+  3. REINFORCE algorithm, originally implemented by [@yanneta]
