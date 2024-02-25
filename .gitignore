@@ -1,2 +1,5 @@
 *.log
 generate_formulas/data/
+/logs/
+/models/
+/__pycache__/
