@@ -3,6 +3,7 @@ import logging
 import os
 import pdb
 import random
+import time
 
 import numpy as np
 import torch
@@ -152,10 +153,14 @@ def to_log_eval(med_flips, mean_flips, accuracy, comment, CI=False):
         logging.info(text)
 
 
-def to_log(flips, loss, accuracy, comment):
+def to_log(flips, loss, accuracy, start_time, comment):
     """when max_tries is not None we compute median flips per observation"""
     if loss is None:
         loss = -1
-    formatting = '{} Flips Med: {:.2f}, Mean: {:.2f}  Acc: {:.2f} Loss: {:.2f}'
-    text = formatting.format(comment, np.median(flips), np.mean(flips), 100 * accuracy, loss)
+    end_time = time.time()
+    execution_time_seconds = end_time - start_time
+    hours, remainder = divmod(execution_time_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    formatting = '{} Flips Med: {:.2f}, Mean: {:.2f}  Acc: {:.2f} Loss: {:.2f} Exec Time: {:02d}:{:02d}:{:02d}'
+    text = formatting.format(comment, np.median(flips), np.mean(flips), 100 * accuracy, loss, int(hours), int(minutes), int(seconds))
     logging.info(text)

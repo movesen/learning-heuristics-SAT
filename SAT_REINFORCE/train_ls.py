@@ -4,6 +4,7 @@ import os
 import pdb
 import random
 import datetime
+import time
 
 import numpy as np
 import torch
@@ -16,7 +17,7 @@ from warm_up import WarmUP
 from utils import *
 
 
-def train_policy(ls, optimizer, noise_optimizer, train_ds, val_ds, args, best_median_flips, model_files):
+def train_policy(ls, optimizer, noise_optimizer, train_ds, val_ds, args, best_median_flips, model_files, start_time):
     best_epoch = 0
     torch.save(ls.policy.state_dict(), model_files[0])
     if ls.train_noise:
@@ -27,7 +28,7 @@ def train_policy(ls, optimizer, noise_optimizer, train_ds, val_ds, args, best_me
     for i in range(1, args.epochs + 1):
         print("epoch ", i)
         flips, loss, accuracy = ls.train_epoch(optimizer, noise_optimizer, train_ds)
-        to_log(flips, loss, accuracy, comment="Train Ep " + str(i))
+        to_log(flips, loss, accuracy, start_time, comment="Train Ep " + str(i))
         scheduler.step()
         if i%5 == 0 and i > 0:
             med_flips, mean_flips, accuracy = ls.evaluate(val_ds)
@@ -67,6 +68,8 @@ def create_filenames(args):
     return log_file, model_files
 
 def main(args):
+    start_time = time.time()
+
     if args.seed > -1:
         random.seed(args.seed)
 
@@ -95,7 +98,7 @@ def main(args):
     to_log_eval(med_flips, mean_flips, accuracy, "EVAL No Train/ WarmUP")
     best_median_flips = np.median(med_flips)
 
-    train_policy(ls, optimizer, noise_optimizer, train_ds, val_ds, args, best_median_flips, model_files)
+    train_policy(ls, optimizer, noise_optimizer, train_ds, val_ds, args, best_median_flips, model_files, start_time)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
