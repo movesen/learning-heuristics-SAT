@@ -264,15 +264,17 @@ class WalkSATLN(SATLearner):
         T = len(log_probs)
         log_probs_filtered = []
         mask = np.zeros(T, dtype=bool)
+        valid_indices = []
         for i, x in enumerate(log_probs):
             if x is not None:
                 log_probs_filtered.append(x)
                 mask[i] = 1
-        temp_diff_tensor = torch.tensor(temp_diff_list)
-        temp_diff_tensor = temp_diff_tensor.view(-1, 1)
-        scaled_log_probs = temp_diff_tensor * torch.stack(log_probs_filtered)
-        p_rewards = self.discount ** torch.arange(T - 1, -1, -1, dtype=torch.float32)
-        loss = -torch.mean(p_rewards[mask] * scaled_log_probs)
+                valid_indices.append(i)
+        temp_diff_list_filtered = temp_diff_list[valid_indices].detach()
+        log_probs_stack = torch.stack(log_probs_filtered)
+        log_probs = log_probs_stack * temp_diff_list_filtered
+        p_rewards = self.discount ** torch.arange(T - 1, -1, -1, dtype=torch.float32, device=log_probs.device)
+        loss = -torch.mean(p_rewards[torch.from_numpy(mask).to(log_probs.device)] * log_probs)
         loss_p = 0
         if self.train_noise:
             loss_p = -torch.mean(p_rewards * torch.stack(log_probs_p))
