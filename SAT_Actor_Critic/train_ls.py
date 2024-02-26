@@ -87,7 +87,7 @@ def main(args):
 
     policy = Net2(input_features=5)
     optimizer = optim.AdamW(policy.parameters(), lr=args.lr/3, weight_decay=1e-5)
-    critic = Critic(state_dim=5, action_dim=1, hidden_size=3)
+    critic = Critic()
     critic_optimizer = optim.AdamW(critic.parameters(), lr=args.lr/3, weight_decay=1e-5)
     noise_policy = NoiseNet()
     noise_optimizer = optim.AdamW(noise_policy.parameters(), lr=1e-3, weight_decay=1e-5)
