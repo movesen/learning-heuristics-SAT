@@ -58,23 +58,28 @@ class Net2(nn.Module):
         return x
 
 class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_size=64):
+    def __init__(self):
         super(Critic, self).__init__()
-        self.fc_state = nn.Linear(state_dim, hidden_size)
-        self.relu = nn.ReLU()
-        self.fc_action = nn.Linear(action_dim, hidden_size) 
-        self.fc_combined = nn.Linear(hidden_size * 2, hidden_size)  
-        self.fc_output = nn.Linear(hidden_size, 1) 
-
-    def forward(self, state, action):
-        x_state = self.relu(self.fc_state(state))
-        action_tensor = torch.tensor(action, dtype=torch.float32).view(-1, 1)  
-        x_action = self.relu(self.fc_action(action_tensor))
-        x_state = x_state.unsqueeze(0)
-        x_combined = torch.cat([x_state, x_action], dim=1)
-        x_combined = self.relu(self.fc_combined(x_combined))
-        value_estimate = self.fc_output(x_combined)
-        return value_estimate.squeeze(dim=1)
+        
+        self.branch1 = nn.Sequential(
+            nn.Linear(5, 10),  # Assuming the first tensor is of size 5
+            nn.ReLU(),
+            nn.Linear(10, 5),
+            nn.ReLU()
+        )
+        
+        self.branch2 = nn.Sequential(
+            nn.Linear(1, 5),  # Assuming the second tensor is of size 1
+            nn.ReLU(),
+            nn.Linear(5, 5),
+            nn.ReLU()
+        )
+        
+        self.final_layers = nn.Sequential(
+            nn.Linear(10, 5),  # Merged size of the two branches (5 + 5)
+            nn.ReLU(),
+            nn.Linear(5, 1)    # Final output is a scalar
+        )
 
 def load_dir(path):
     data = []
