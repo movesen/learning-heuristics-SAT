@@ -62,24 +62,33 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
         
         self.branch1 = nn.Sequential(
-            nn.Linear(5, 10),  # Assuming the first tensor is of size 5
+            nn.Linear(5, 10),
             nn.ReLU(),
             nn.Linear(10, 5),
             nn.ReLU()
         )
         
         self.branch2 = nn.Sequential(
-            nn.Linear(1, 5),  # Assuming the second tensor is of size 1
+            nn.Linear(1, 5),
             nn.ReLU(),
             nn.Linear(5, 5),
             nn.ReLU()
         )
         
         self.final_layers = nn.Sequential(
-            nn.Linear(10, 5),  # Merged size of the two branches (5 + 5)
+            nn.Linear(10, 5),
             nn.ReLU(),
-            nn.Linear(5, 1)    # Final output is a scalar
+            nn.Linear(5, 1)
         )
+    
+    def forward(self, x1, x2):
+        x1 = self.branch1(x1)
+        x2 = self.branch2(x2)
+        
+        x = torch.cat((x1, x2), dim=-1)
+        
+        output = self.final_layers(x)
+        return output
 
 def load_dir(path):
     data = []
