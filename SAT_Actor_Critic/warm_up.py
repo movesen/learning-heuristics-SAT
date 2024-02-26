@@ -15,6 +15,10 @@ class WarmUP(SATLearner):
     def __init__(self, policy, noise_policy, critic, max_flips=10000, p=0.5):
         super().__init__(policy, noise_policy, critic, max_flips, p)
         self.break_histo = np.zeros(1000)
+    
+    def get_reward(self, previous_unsat_clauses, current_unsat_clauses):
+        reward = previous_unsat_clauses - current_unsat_clauses
+        return reward
         
     def select_variable_reinforce(self, x, f, unsat_clause):
         index, lit = self.walksat_step(f, unsat_clause)
@@ -48,6 +52,7 @@ class WarmUP(SATLearner):
         self.backflipped = 0
         while self.flips < self.max_flips:
             unsat_clause_indices = [k for k in range(len(f.clauses)) if self.true_lit_count[k] == 0]
+            current_unsat_clauses = len(unsat_clause_indices)            
             sat = not unsat_clause_indices
             if sat:
                 break
@@ -57,8 +62,10 @@ class WarmUP(SATLearner):
             if log_prob:
                 log_probs.append(-log_prob)
             self.update_stats(f, literal)
+            new_unsat_clauses = len([k for k in range(len(f.clauses)) if self.true_lit_count[k] == 0])
+            reward = self.get_reward(current_unsat_clauses, new_unsat_clauses)
             if value:
-                state_action_pairs.append(-value) #try pos
+                state_action_pairs.append((value-reward)**2)
         loss = 0
         cl = 0
         if len(state_action_pairs) > 0:
@@ -82,6 +89,7 @@ class WarmUP(SATLearner):
         critic_losses = []
         for f in data:
             self.policy.train()
+            self.critic.train()
             sat, flips, backflipped, loss, cl = self.generate_episode_reinforce(f)
             flip_list.append(flips)
             if cl:
