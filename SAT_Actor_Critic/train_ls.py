@@ -3,6 +3,7 @@ import logging
 import os
 import pdb
 import random
+import datetime
 
 import numpy as np
 import torch
@@ -13,7 +14,6 @@ import torch.optim as optim
 from local_search import WalkSATLN
 from warm_up import WarmUP
 from utils import *
-import datetime
 
 
 
