@@ -13,6 +13,7 @@ import torch.optim as optim
 from local_search import WalkSATLN
 from warm_up import WarmUP
 from utils import *
+import datetime
 
 
 
@@ -54,12 +55,14 @@ def train_warm_up(policy, noise_policy, critic, optimizer, critic_optimizer, tra
 
 def create_filenames(args):
     model_files = []
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     basename = args.dir_path.replace("../", "").replace("/", "_") + "_d_" +  str(args.discount)
     basename += "_e" + str(args.epochs) + "_n_" + str(args.n_train)
     if args.train_noise:
         basename += "tr_noise"
     if args.warm_up == 0:
-         basename += "_no_wup"
+        basename += "_no_wup"
+    basename += "_" + timestamp
     log_file = "logs/" + basename +  ".log"
     model_files.append("models/" + basename +  "_score.pt")
     model_files.append("models/" + basename +  "_p.pt")
