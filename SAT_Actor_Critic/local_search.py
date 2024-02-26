@@ -218,7 +218,7 @@ class WalkSATLN(SATLearner):
         self.init_all(f)
         log_probs = []
         log_probs_p = []
-        state_action_pairs = []
+        values = []
         num_unsat_clauses = len(f.clauses)
         while self.flips < self.max_flips:
             unsat_clause_indices = [k for k in range(len(f.clauses)) if self.true_lit_count[k] == 0]
@@ -237,32 +237,28 @@ class WalkSATLN(SATLearner):
             literal, log_prob, log_prob_p, x, value = self.select_literal(f, list_literals)
             self.update_stats(f, literal)
             log_probs.append(log_prob)
-            state_action_pairs.append((x, literal, value))
+            if value is None:
+                values.append(0)
+            else:
+                values.append(value)
             if self.train_noise:
                 log_probs_p.append(log_prob_p)
-        return sat, self.flips, log_probs, log_probs_p, state_action_pairs
+        return sat, self.flips, log_probs, log_probs_p, values
 
-    def critic_loss(self, state_action_pairs, sat):
-        '''
-        Calculate the total discounted return G for each time step in the trajectory:
-            For each (sₜ, aₜ) in the trajectory:
-                Calculate Gₜ = ∑ᵢ₌ₜᴺ y^(i-t) * rᵢ, where N is the last time step in the episode and γ is the discount factor.
-        '''
+    def critic_loss(self, values):
+        values = torch.tensor(values, dtype=torch.float32, requires_grad=True)
         gamma = 0.99
-        critic_loss = 0
-        temp_diff_list = []
-        for t, (_, _, value) in enumerate(state_action_pairs):
-            temp_diff = 0
-            g_t = 0
-            for i, (_, _, future_value) in enumerate(state_action_pairs[t:]):
-                if future_value is not None:
-                    g_t += (gamma ** i) * future_value
-            if value is not None:
-                temp_diff = g_t - value
-                critic_loss += temp_diff ** 2
-            temp_diff_list.append(temp_diff)
-        critic_loss = torch.tensor(critic_loss, dtype=torch.float32, requires_grad=True)
-        return torch.mean(critic_loss), temp_diff_list
+        n = values.size(0)
+        discounts = gamma ** torch.arange(n).unsqueeze(1)
+        discounts = discounts.tril()
+
+        future_values = values.unsqueeze(0).repeat(n, 1) * discounts
+        g_ts = future_values.sum(dim=1)
+
+        temp_diffs = g_ts - values
+        critic_loss = temp_diffs.pow(2).mean()
+
+        return critic_loss, temp_diffs
 
     def reinforce_loss(self, log_probs, log_probs_p, temp_diff_list):
         T = len(log_probs)
@@ -272,7 +268,7 @@ class WalkSATLN(SATLearner):
             if x is not None:
                 log_probs_filtered.append(x)
                 mask[i] = 1
-        temp_diff_tensor = torch.tensor([temp_diff_list])
+        temp_diff_tensor = torch.tensor(temp_diff_list)
         temp_diff_tensor = temp_diff_tensor.view(-1, 1)
         scaled_log_probs = temp_diff_tensor * torch.stack(log_probs_filtered)
         p_rewards = self.discount ** torch.arange(T - 1, -1, -1, dtype=torch.float32)
@@ -290,9 +286,9 @@ class WalkSATLN(SATLearner):
         critic_losses = []
         for f in list_f:
             self.critic.train()
-            sat, flips, log_probs, log_probs_p, state_action_pairs = self.generate_episode_reinforce(f)
+            sat, flips, log_probs, log_probs_p, values = self.generate_episode_reinforce(f)
             all_flips.append(flips)
-            critic_loss, temp_diff_list = self.critic_loss(state_action_pairs, sat)
+            critic_loss, temp_diff_list = self.critic_loss(values)
             if critic_loss:
                 critic_optimizer.zero_grad() 
                 critic_loss.backward()
