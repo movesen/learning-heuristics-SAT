@@ -9,7 +9,7 @@ Included in the repository:
 
 **Introduction**
 ----
-Local search algorithms are recognized for their effectiveness in addressing large, hard instances of the satisfiability problem (SAT). The success of these algorithms significantly hinges on the application of heuristics to adjust noise parameters and evaluate variables. The best configuration of these heuristics changes across various instance distributions. In this study, we introduce new reinforcement learning methods to develop efficient variable evaluation functions.
+Local search algorithms are recognized for their effectiveness in addressing large, hard instances of the satisfiability problem (SAT). The success of these algorithms significantly hinges on the application of heuristics to adjust noise parameters and evaluate variables. The best configuration of these heuristics changes across various instance distributions. In this study, we introduce multiple new reinforcement learning methods to develop efficient variable evaluation functions.
 
 **Requirements**
 ----
