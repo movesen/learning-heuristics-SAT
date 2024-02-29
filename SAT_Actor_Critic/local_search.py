@@ -163,10 +163,11 @@ class SATLearner:
         return literal
 
 class WalkSATLN(SATLearner):
-    def __init__(self, policy, noise_policy, critic, train_noise=False, max_tries=10, max_flips=10000, p=0.5, discount=0.5):
+    def __init__(self, policy, noise_policy, critic, train_noise=False, max_tries=10, max_flips=10000, p=0.5, discount=0.5, gamma=0.99):
         super().__init__(policy, noise_policy, critic, train_noise, max_flips, p)
         self.max_tries = max_tries
         self.discount = discount
+        self.gamma = gamma
         self.unsat_clauses = []
         
     def select_variable_reinforce(self, x):
@@ -247,9 +248,8 @@ class WalkSATLN(SATLearner):
 
     def critic_loss(self, values):
         values = torch.tensor(values, dtype=torch.float32, requires_grad=True)
-        gamma = 0.99
         n = values.size(0)
-        discounts = gamma ** torch.arange(n).unsqueeze(1)
+        discounts = self.gamma ** torch.arange(n).unsqueeze(1)
         discounts = discounts.tril()
 
         future_values = values.unsqueeze(0).repeat(n, 1) * discounts
