@@ -3,8 +3,8 @@
 This repository provides three different implementations of Reinforcement Learning techniques for learning SAT (Boolean Satisfybility) solver heuristics.
 
 Included in the repository:
-  1. Actor Critic algorithm
-  2. Experience Replay implementation
+  1. [Actor Critic algorithm](https://github.com/movesen/learning-heuristics-SAT/tree/main/SAT_Actor_Critic)
+  2. [Experience Replay implementation](https://github.com/movesen/learning-heuristics-SAT/tree/main/SAT_Experience_Replay)
   3. REINFORCE algorithm, originally implemented by [@yanneta](https://github.com/yanneta)
 
 **Introduction**
