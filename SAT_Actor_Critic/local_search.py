@@ -254,6 +254,7 @@ class WalkSATLN(SATLearner):
         if values:
             values = torch.cat(values)
         else: values = torch.tensor([0.0], requires_grad=True)
+        n = values.size(0)
         discounts = self.gamma ** torch.arange(n).unsqueeze(1)
         discounts = discounts.tril()
         future_values = values.unsqueeze(0).repeat(n, 1) * discounts
