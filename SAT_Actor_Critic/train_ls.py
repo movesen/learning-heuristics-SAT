@@ -49,7 +49,7 @@ def train_policy(ls, optimizer, noise_optimizer, critic_optimizer, train_ds, val
     logging.info(text)
 
 def train_warm_up(policy, noise_policy, critic, optimizer, critic_optimizer, train_ds, max_flips=5000):
-    wup = WarmUP(policy, noise_policy, critic, max_flips=max_flips)
+    wup = WarmUP(policy, noise_policy, critic, max_flips=args.wu_max_flips)
     for i in range(args.warm_up):
         loss, critic_loss, flips = wup.train_epoch(optimizer, critic_optimizer, train_ds)
         logging.info('Warm_up train loss {:.2f}, critic loss {:.2f}, med flips {:.2f}'.format(loss, critic_loss, flips))
@@ -111,6 +111,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--max_tries', type=int, default=10)
     parser.add_argument('--max_flips', type=int, default=10000)
+    parser.add_argument('--wu_max_flips', type=int, default=30)
     parser.add_argument('--p', type=float, default=0.12)
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--lr', type=float, default=0.01)
