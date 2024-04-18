@@ -131,7 +131,11 @@ class SATLearner:
             sample = int(random.random() < self.p)
             log_prob_p = 0
         if sample == 1:
-            literal = random.choice(list_literals)
+            index = random.randint(0, len(list_literals) - 1)
+            literal = list_literals[index]
+            x = self.stats_per_clause(f, list_literals)
+            lit_x = x[index]
+            current_value = self.critic_estimate_value(torch.tensor(lit_x, dtype=torch.float32), torch.tensor([literal], dtype=torch.float32))
         else:
             literal, log_prob, x, current_value = self.reinforce_step(f, list_literals)
             v = abs(literal)
@@ -247,17 +251,15 @@ class WalkSATLN(SATLearner):
         return sat, self.flips, log_probs, log_probs_p, values
 
     def critic_loss(self, values):
-        values = torch.tensor(values, dtype=torch.float32, requires_grad=True)
-        n = values.size(0)
+        if values:
+            values = torch.cat(values)
+        else: values = torch.tensor([0.0], requires_grad=True)
         discounts = self.gamma ** torch.arange(n).unsqueeze(1)
         discounts = discounts.tril()
-
         future_values = values.unsqueeze(0).repeat(n, 1) * discounts
         g_ts = future_values.sum(dim=1)
-
         temp_diffs = g_ts - values
         critic_loss = temp_diffs.pow(2).mean()
-
         return critic_loss, temp_diffs
 
     def reinforce_loss(self, log_probs, log_probs_p, temp_diff_list):
