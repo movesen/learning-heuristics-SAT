@@ -21,8 +21,9 @@ def flatten(l):
     return [item for sublist in l for item in sublist]
 
 class SATLearner:
-    def __init__(self, policy, noise_policy, train_noise=False, max_flips=10000, p=0.5):
+    def __init__(self, policy, noise_policy, critic, train_noise=False, max_flips=10000, p=0.5):
         self.policy = policy
+        self.critic = critic
         self.model_np =()
         self.noise_policy = noise_policy
         self.steps_since_improv = 0
@@ -34,6 +35,7 @@ class SATLearner:
         self.sol = []
         self.flips = 0
         self.train_noise = train_noise
+        self.critic_t_loss = []
 
     def compute_true_lit_count(self, clauses):
         n_clauses = len(clauses)
@@ -52,7 +54,6 @@ class SATLearner:
         self.sol[abs(literal)] *= -1
 
     def normalize_breaks(self, x):
-        #return np.minimum(x, 5)/5
         return x/5
 
     def normalize_breaks2(self, x):
@@ -106,12 +107,10 @@ class SATLearner:
         p = self.noise_policy(x)
         m = Bernoulli(p)
         sample = m.sample()
-        #print(self.flips, p.item(), self.steps_since_improv)
         return sample[0], m.log_prob(sample)[0]
 
     def select_literal_eval(self, f, list_literals):
         sample = int(random.random() < self.p)
-        #sample, _ = self.sample_estimate_p(f)
         if sample == 1:
             literal = random.choice(list_literals)
         else:
@@ -124,21 +123,24 @@ class SATLearner:
 
     def select_literal(self, f, list_literals):
         log_prob = None
+        x = None
         if self.train_noise:
             sample, log_prob_p = self.sample_estimate_p(f)
         else:
             sample = int(random.random() < self.p)
             log_prob_p = 0
         if sample == 1:
-            literal = random.choice(list_literals)
+            index = random.randint(0, len(list_literals) - 1)
+            literal = list_literals[index]
+            x = self.stats_per_clause(f, list_literals)
+            lit_x = torch.tensor(x[index], dtype=torch.float32)
         else:
-            literal, log_prob = self.reinforce_step(f, list_literals)
+            literal, log_prob, x, lit_x = self.reinforce_step(f, list_literals)
             v = abs(literal)
             self.age2[v] = self.flips
             self.last_10.insert(0, v)
             self.last_10 = self.last_10[:10]
-        
-        return literal, log_prob, log_prob_p
+        return literal, log_prob, log_prob_p, x, lit_x
 
     def update_stats(self, f, literal):
         v = abs(literal)
@@ -163,10 +165,11 @@ class SATLearner:
         return literal
 
 class WalkSATLN(SATLearner):
-    def __init__(self, policy, noise_policy,  train_noise=False, max_tries=10, max_flips=10000, p=0.5, discount=0.5):
-        super().__init__(policy, noise_policy, train_noise, max_flips, p)
+    def __init__(self, policy, noise_policy, critic, train_noise=False, max_tries=10, max_flips=10000, p=0.5, discount=0.5, gamma=0.99):
+        super().__init__(policy, noise_policy, critic, train_noise, max_flips, p)
         self.max_tries = max_tries
         self.discount = discount
+        self.gamma = gamma
         self.unsat_clauses = []
         
     def select_variable_reinforce(self, x):
@@ -181,8 +184,12 @@ class WalkSATLN(SATLearner):
         x = torch.from_numpy(x).float()
         index, log_prob = self.select_variable_reinforce(x)
         literal = list_literals[index]
-        return literal, log_prob
+        lit_x = torch.tensor(x[index], dtype=torch.float32)
+        return literal, log_prob, x, lit_x
 
+    def critic_estimate_value(self, x, literal):
+        value = self.critic(x, literal)
+        return value
 
     def init_all(self, f):
         self.sol = [x if random.random() < 0.5 else -x for x in range(f.n_variables + 1)]
@@ -195,7 +202,6 @@ class WalkSATLN(SATLearner):
 
     def generate_episode_reinforce_eval(self, f):
         self.init_all(f)
-        num_unsat_clauses = len(f.clauses)
         while self.flips < self.max_flips:
             unsat_clause_indices = [k for k in range(len(f.clauses)) if self.true_lit_count[k] == 0]
             sat = not unsat_clause_indices
@@ -212,6 +218,7 @@ class WalkSATLN(SATLearner):
         self.init_all(f)
         log_probs = []
         log_probs_p = []
+        values = []
         num_unsat_clauses = len(f.clauses)
         while self.flips < self.max_flips:
             unsat_clause_indices = [k for k in range(len(f.clauses)) if self.true_lit_count[k] == 0]
@@ -227,50 +234,79 @@ class WalkSATLN(SATLearner):
             self.flips += 1
             indeces = np.random.choice(unsat_clause_indices, 1)
             list_literals = f.clauses[indeces[0]] 
-            literal, log_prob, log_prob_p = self.select_literal(f, list_literals)
+            literal, log_prob, log_prob_p, x, lit_x = self.select_literal(f, list_literals)
+            value = self.critic_estimate_value(lit_x, torch.tensor([literal], dtype=torch.float32))
             self.update_stats(f, literal)
             log_probs.append(log_prob)
+            values.append(value)
             if self.train_noise:
                 log_probs_p.append(log_prob_p)
-        return sat, self.flips, log_probs, log_probs_p
+        return sat, self.flips, log_probs, log_probs_p, values
+    
+    def value_loss(self, values):
+        n = values.size(0)
+        discounts = self.gamma ** torch.arange(n).unsqueeze(1)
+        future_values = values.unsqueeze(0).repeat(n, 1) * discounts
+        g_ts = future_values.sum(dim=1)
 
-    def reinforce_loss(self, log_probs, log_probs_p):
+        temp_diffs = g_ts - values
+        v_loss = -F.mse_loss(g_ts, values)
+
+        return v_loss, temp_diffs
+
+    def reinforce_loss(self, log_probs, log_probs_p, values, advantage):
         T = len(log_probs)
         log_probs_filtered = []
         mask = np.zeros(T, dtype=bool)
+        valid_indices = []
         for i, x in enumerate(log_probs):
             if x is not None:
                 log_probs_filtered.append(x)
                 mask[i] = 1
+                valid_indices.append(i)
 
-        log_probs = torch.stack(log_probs_filtered)
+        log_probs = torch.stack(log_probs_filtered)*advantage[valid_indices].detach()
         p_rewards = self.discount ** torch.arange(T - 1, -1, -1, dtype=torch.float32, device=log_probs.device)
         loss = -torch.mean(p_rewards[torch.from_numpy(mask).to(log_probs.device)] * log_probs)
+
         loss_p = 0
         if self.train_noise:
             loss_p = -torch.mean(p_rewards * torch.stack(log_probs_p))
         return loss, loss_p
 
-    def generate_episodes(self, list_f):
+    def generate_episodes(self, list_f, critic_optimizer, scheduler_critic):
         losses = []
         losses_p = []
         all_flips = []
         sats = []
+        critic_losses = []
         for f in list_f:
-            sat, flips, log_probs, log_probs_p = self.generate_episode_reinforce(f)
+            self.critic.train()
+            sat, flips, log_probs, log_probs_p, values = self.generate_episode_reinforce(f)
             all_flips.append(flips)
-            if sat and flips > 0 and not all(map(lambda x: x is None, log_probs)):
-                loss, loss_p = self.reinforce_loss(log_probs, log_probs_p)
+            if values:
+                values = torch.cat(values, dim=0)
+            else: values = torch.tensor([0.0])
+            v_loss, advantage = self.value_loss(values)
+            if v_loss:
+                critic_optimizer.zero_grad() 
+                v_loss.backward()
+                critic_optimizer.step()
+                scheduler_critic.step()
+                critic_losses.append(v_loss.item())
+            if sat and not all(map(lambda x: x is None, log_probs)):
+                loss, loss_p = self.reinforce_loss(log_probs, log_probs_p, values, advantage)
                 losses.append(loss)
                 losses_p.append(loss_p)
-            sats.append(sat)    
+            sats.append(sat)  
+              
         if losses:
             losses = torch.stack(losses).sum()
             if self.train_noise:
                 losses_p = torch.stack(losses_p).sum()
             else:
                 losses_p = 0
-        return all_flips, losses, losses_p, np.array(sats)
+        return all_flips, losses, losses_p, np.array(sats), critic_losses
     
     def generate_episodes_eval(self, f):
         all_flips = []
@@ -286,7 +322,6 @@ class WalkSATLN(SATLearner):
         x = np.array([0, 0])
         x = torch.from_numpy(x[None,]).float()
         self.p = self.noise_policy(x)[0][0].item()
-        
 
     def evaluate(self, data):
         med_flips = []
@@ -303,10 +338,11 @@ class WalkSATLN(SATLearner):
             accuracy.append(solved)
         return med_flips, mean_flips,  np.mean(accuracy)
 
-    def train_epoch(self, optimizer, noise_optimizer, data):
+    def train_epoch(self, optimizer, noise_optimizer, critic_optimizer, scheduler_critic, data):
         losses = []
         all_flips = []
         mean_losses = []
+        value_losses = []
         accuracy = []
         np.random.shuffle(data)
         k = self.max_tries
@@ -314,7 +350,7 @@ class WalkSATLN(SATLearner):
         for list_f in batches:
             self.policy.train()
             self.noise_policy.train()
-            flips, loss, loss_p, sats = self.generate_episodes(list_f)
+            flips, loss, loss_p, sats, critic_loss = self.generate_episodes(list_f, critic_optimizer, scheduler_critic)
             acc = sats.mean()
             if acc > 0:
                 optimizer.zero_grad()
@@ -327,10 +363,11 @@ class WalkSATLN(SATLearner):
                     loss_p.backward()
                     noise_optimizer.step()
 
+            value_losses.append(np.mean(critic_loss))
+
             all_flips.append(flips)
             accuracy.append(acc)
         mean_loss = -1
         if mean_losses:
             mean_loss = np.mean(mean_losses)
-        return flatten(all_flips), mean_loss, np.mean(accuracy) 
-
+        return flatten(all_flips), mean_loss, np.mean(accuracy), value_losses

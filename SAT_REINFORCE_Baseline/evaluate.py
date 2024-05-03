@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from local_search import WalkSATLN
 from utils import *
 
+
 def main(args):
     if args.seed > -1:
         random.seed(args.seed)

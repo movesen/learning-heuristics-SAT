@@ -15,11 +15,12 @@ import torch.optim as optim
 from local_search import WalkSATLN
 from warm_up import WarmUP
 from utils import *
-
+from matplotlib import pyplot as plt
 
 
 def train_policy(ls, optimizer, noise_optimizer, critic_optimizer, train_ds, val_ds, args, best_median_flips, model_files, start_time):
     best_epoch = 0
+    c_loss = []
     torch.save(ls.policy.state_dict(), model_files[0])
     if ls.train_noise:
         torch.save(ls.noise_policy.state_dict(), model_files[1])
@@ -30,6 +31,7 @@ def train_policy(ls, optimizer, noise_optimizer, critic_optimizer, train_ds, val
     for i in range(1, args.epochs + 1):
         print("epoch ", i)
         flips, loss, accuracy, critic_losses = ls.train_epoch(optimizer, noise_optimizer, critic_optimizer, scheduler_critic, train_ds)
+        c_loss.append(np.mean(critic_losses))
         to_log(flips, loss, accuracy, start_time, comment="Train Ep " + str(i))
         scheduler.step()
         if i%5 == 0 and i > 0:
@@ -47,9 +49,11 @@ def train_policy(ls, optimizer, noise_optimizer, critic_optimizer, train_ds, val
     formatting = 'Best Flips Med: {:.2f}, Best epoch: {}'
     text = formatting.format(best_median_flips,  best_epoch)
     logging.info(text)
+    plt.plot(c_loss)
+    plt.show()
 
 def train_warm_up(policy, noise_policy, critic, optimizer, critic_optimizer, train_ds, max_flips=5000):
-    wup = WarmUP(policy, noise_policy, critic, max_flips=max_flips)
+    wup = WarmUP(policy, noise_policy, critic, max_flips=args.wu_max_flips)
     for i in range(args.warm_up):
         loss, critic_loss, flips = wup.train_epoch(optimizer, critic_optimizer, train_ds)
         logging.info('Warm_up train loss {:.2f}, critic loss {:.2f}, med flips {:.2f}'.format(loss, critic_loss, flips))
@@ -91,7 +95,7 @@ def main(args):
     policy = Net2(input_features=5)
     optimizer = optim.AdamW(policy.parameters(), lr=args.lr/3, weight_decay=1e-5)
     critic = Critic()
-    critic_optimizer = optim.AdamW(critic.parameters(), lr=args.lr_c, weight_decay=1e-5)
+    critic_optimizer = optim.AdamW(critic.parameters(), lr=args.lr_c/3, weight_decay=1e-5)
     noise_policy = NoiseNet()
     noise_optimizer = optim.AdamW(noise_policy.parameters(), lr=1e-3, weight_decay=1e-5)
 
@@ -101,18 +105,24 @@ def main(args):
     med_flips, mean_flips, accuracy = ls.evaluate(val_ds)
     to_log_eval(med_flips, mean_flips, accuracy, "EVAL No Train/ WarmUP")
     best_median_flips = np.median(med_flips)
-
+    for name, param in critic.named_parameters():
+        if param.requires_grad:
+            print(name, param.data)
     train_policy(ls, optimizer, noise_optimizer, critic_optimizer, train_ds, val_ds, args, best_median_flips, model_files, start_time)
+    for name, param in critic.named_parameters():
+        if param.requires_grad:
+            print(name, param.data)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-d', '--dir_path', type=str)
+    parser.add_argument('-d', '--dir_path', type=str, default='../generate_formulas/data/rand3sat/5-21')
     parser.add_argument('-m', '--model_path', type=str)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--max_tries', type=int, default=10)
     parser.add_argument('--max_flips', type=int, default=10000)
+    parser.add_argument('--wu_max_flips', type=int, default=30)
     parser.add_argument('--p', type=float, default=0.12)
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--lr_c', type=float, default=0.01)
     parser.add_argument('--discount', type=float, default=0.5)

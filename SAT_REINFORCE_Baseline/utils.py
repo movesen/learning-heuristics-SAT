@@ -14,6 +14,7 @@ from pathlib import Path
 
 from cnf import CNF
 
+
 p_dict = {"domset":0.0693, "kclique":0.1218,  "kcolor":0.0895, "rand3sat":0.06436, "rand4sat":0.057}
 
 def model_to_numpy(model):
@@ -57,6 +58,39 @@ class Net2(nn.Module):
     def forward(self, x):
         x = self.lin(x)
         return x
+
+class Critic(nn.Module):
+    def __init__(self):
+        super(Critic, self).__init__()
+        
+        self.branch1 = nn.Sequential(
+            nn.Linear(5, 10),
+            nn.ReLU(),
+            nn.Linear(10, 5),
+            nn.ReLU()
+        )
+        
+        self.branch2 = nn.Sequential(
+            nn.Linear(1, 5),
+            nn.ReLU(),
+            nn.Linear(5, 5),
+            nn.ReLU()
+        )
+        
+        self.final_layers = nn.Sequential(
+            nn.Linear(10, 5),
+            nn.ReLU(),
+            nn.Linear(5, 1)
+        )
+    
+    def forward(self, x1, x2):
+        x1 = self.branch1(x1)
+        x2 = self.branch2(x2)
+        
+        x = torch.cat((x1, x2), dim=-1)
+        
+        output = self.final_layers(x)
+        return output
 
 def load_dir(path):
     data = []
