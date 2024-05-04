@@ -246,7 +246,7 @@ class WalkSATLN(SATLearner):
     def value_loss(self, values):
         n = values.size(0)
         discounts = self.gamma ** torch.arange(n).unsqueeze(1)
-        future_values = values.unsqueeze(0).repeat(n, 1) * discounts
+        future_values = values.unsqueeze(0).repeat(n, 1).tril() * discounts
         g_ts = future_values.sum(dim=1)
 
         temp_diffs = g_ts - values
