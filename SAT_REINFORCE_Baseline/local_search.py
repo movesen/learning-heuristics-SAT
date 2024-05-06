@@ -245,13 +245,11 @@ class WalkSATLN(SATLearner):
     
     def value_loss(self, values):
         n = values.size(0)
-        discounts = self.gamma ** torch.arange(n).unsqueeze(1)
-        future_values = values.unsqueeze(0).repeat(n, 1).tril() * discounts
+        rewards = self.gamma ** torch.arange(n - 1, -1, -1, dtype=torch.float32)
+        future_values = rewards.unsqueeze(0).repeat(n, 1).tril()
         g_ts = future_values.sum(dim=1)
-
         temp_diffs = g_ts - values
         v_loss = -F.mse_loss(g_ts, values)
-
         return v_loss, temp_diffs
 
     def reinforce_loss(self, log_probs, log_probs_p, values, advantage):
@@ -264,11 +262,9 @@ class WalkSATLN(SATLearner):
                 log_probs_filtered.append(x)
                 mask[i] = 1
                 valid_indices.append(i)
-
         log_probs = torch.stack(log_probs_filtered)*advantage[valid_indices].detach()
         p_rewards = self.discount ** torch.arange(T - 1, -1, -1, dtype=torch.float32, device=log_probs.device)
         loss = -torch.mean(p_rewards[torch.from_numpy(mask).to(log_probs.device)] * log_probs)
-
         loss_p = 0
         if self.train_noise:
             loss_p = -torch.mean(p_rewards * torch.stack(log_probs_p))
@@ -286,7 +282,7 @@ class WalkSATLN(SATLearner):
             all_flips.append(flips)
             if values:
                 values = torch.cat(values, dim=0)
-            else: values = torch.tensor([0.0])
+            else: values = torch.tensor([0.0], requires_grad=True)
             v_loss, advantage = self.value_loss(values)
             if v_loss:
                 critic_optimizer.zero_grad() 
