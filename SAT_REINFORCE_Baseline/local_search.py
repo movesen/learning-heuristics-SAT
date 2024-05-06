@@ -243,9 +243,9 @@ class WalkSATLN(SATLearner):
                 log_probs_p.append(log_prob_p)
         return sat, self.flips, log_probs, log_probs_p, values
     
-    def value_loss(self, values):
+    def value_loss(self, values, sat):
         n = values.size(0)
-        rewards = self.gamma ** torch.arange(n - 1, -1, -1, dtype=torch.float32)
+        rewards = self.gamma ** torch.arange(n - 1, -1, -1, dtype=torch.float32) * int(sat)
         future_values = rewards.unsqueeze(0).repeat(n, 1).tril()
         g_ts = future_values.sum(dim=1)
         temp_diffs = g_ts - values
@@ -283,7 +283,7 @@ class WalkSATLN(SATLearner):
             if values:
                 values = torch.cat(values, dim=0)
             else: values = torch.tensor([0.0], requires_grad=True)
-            v_loss, advantage = self.value_loss(values)
+            v_loss, advantage = self.value_loss(values, sat)
             if v_loss:
                 critic_optimizer.zero_grad() 
                 v_loss.backward()
