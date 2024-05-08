@@ -52,8 +52,8 @@ def train_policy(ls, optimizer, noise_optimizer, critic_optimizer, train_ds, val
     plt.plot(c_loss)
     plt.show()
 
-def train_warm_up(policy, noise_policy, critic, optimizer, critic_optimizer, train_ds, max_flips=5000):
-    wup = WarmUP(policy, noise_policy, critic, max_flips=args.wu_max_flips)
+def train_warm_up(policy, noise_policy, critic, optimizer, critic_optimizer, train_ds, max_flips):
+    wup = WarmUP(policy, noise_policy, critic, max_flips=max_flips)
     for i in range(args.warm_up):
         loss, critic_loss, flips = wup.train_epoch(optimizer, critic_optimizer, train_ds)
         logging.info('Warm_up train loss {:.2f}, critic loss {:.2f}, med flips {:.2f}'.format(loss, critic_loss, flips))
@@ -100,29 +100,24 @@ def main(args):
     noise_optimizer = optim.AdamW(noise_policy.parameters(), lr=1e-3, weight_decay=1e-5)
 
     if args.warm_up > 0:
-        train_warm_up(policy, noise_policy, critic, optimizer, critic_optimizer, train_ds)
+        train_warm_up(policy, noise_policy, critic, optimizer, critic_optimizer, train_ds, args.wu_max_flips)
     ls = WalkSATLN(policy, noise_policy, critic, args.train_noise, args.max_tries, args.max_flips, discount=args.discount, gamma=args.gamma, p=p)
     med_flips, mean_flips, accuracy = ls.evaluate(val_ds)
     to_log_eval(med_flips, mean_flips, accuracy, "EVAL No Train/ WarmUP")
     best_median_flips = np.median(med_flips)
-    for name, param in critic.named_parameters():
-        if param.requires_grad:
-            print(name, param.data)
     train_policy(ls, optimizer, noise_optimizer, critic_optimizer, train_ds, val_ds, args, best_median_flips, model_files, start_time)
-    for name, param in critic.named_parameters():
-        if param.requires_grad:
-            print(name, param.data)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-d', '--dir_path', type=str, default='../generate_formulas/data/rand3sat/5-21')
+    parser.add_argument('-d', '--dir_path', type=str)
     parser.add_argument('-m', '--model_path', type=str)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--max_tries', type=int, default=10)
     parser.add_argument('--max_flips', type=int, default=10000)
-    parser.add_argument('--wu_max_flips', type=int, default=30)
+    parser.add_argument('--wu_max_flips', type=int, default=20)
     parser.add_argument('--p', type=float, default=0.12)
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--lr_c', type=float, default=0.01)
     parser.add_argument('--discount', type=float, default=0.5)

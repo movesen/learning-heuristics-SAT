@@ -12,8 +12,8 @@ from local_search import SATLearner
 
 
 class WarmUP(SATLearner):
-    def __init__(self, policy, noise_policy, critic, max_flips=10000, p=0.5):
-        super().__init__(policy, noise_policy, critic, max_flips, p)
+    def __init__(self, policy, noise_policy, critic, train_noise=False, max_flips=10000, p=0.5):
+        super().__init__(policy, noise_policy, critic, train_noise, max_flips, p)
         self.break_histo = np.zeros(1000)
     
     def get_reward(self, previous_unsat_clauses, current_unsat_clauses):

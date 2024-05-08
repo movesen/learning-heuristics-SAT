@@ -46,7 +46,7 @@ def train_policy(ls, optimizer, noise_optimizer, train_ds, val_ds, args, best_me
     text = formatting.format(best_median_flips,  best_epoch)
     logging.info(text)
 
-def train_warm_up(policy, noise_policy, optimizer, train_ds, max_flips=5000):
+def train_warm_up(policy, noise_policy, optimizer, train_ds, max_flips):
     wup = WarmUP(policy, noise_policy, max_flips=max_flips)
     for i in range(args.warm_up):
         loss, flips = wup.train_epoch(optimizer, train_ds)
@@ -92,13 +92,13 @@ def main(args):
     noise_optimizer = optim.AdamW(noise_policy.parameters(), lr=1e-3, weight_decay=1e-5)
 
     if args.warm_up > 0:
-        train_warm_up(policy, noise_policy, optimizer, train_ds)
+        train_warm_up(policy, noise_policy, optimizer, train_ds, args.wu_max_flips)
     ls = WalkSATLN(policy, noise_policy, args.train_noise, args.max_tries, args.max_flips, discount=args.discount, p=p)
     med_flips, mean_flips, accuracy = ls.evaluate(val_ds)
     to_log_eval(med_flips, mean_flips, accuracy, "EVAL No Train/ WarmUP")
     best_median_flips = np.median(med_flips)
-
     train_policy(ls, optimizer, noise_optimizer, train_ds, val_ds, args, best_median_flips, model_files, start_time)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -107,8 +107,9 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--max_tries', type=int, default=10)
     parser.add_argument('--max_flips', type=int, default=10000)
+    parser.add_argument('--wu_max_flips', type=int, default=20)
     parser.add_argument('--p', type=float, default=0.12)
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--discount', type=float, default=0.5)
     parser.add_argument('--warm_up', type=int, default=10)
