@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from local_search import WalkSATLN
+from eval_walksat import WalkSATLN2
 from utils import *
 
 
@@ -32,7 +33,7 @@ def main(args):
     if args.noise_model_path is not None:
         noise_policy.load_state_dict(torch.load(args.noise_model_path))
         train_noise = True
-    ls = WalkSATLN(policy, noise_policy, train_noise, args.max_tries, args.max_flips, p=p)
+    ls = WalkSATLN2(policy, noise_policy, train_noise, args.max_tries, args.max_flips, p=p)
     med_flips, mean_flips,  accuracy = ls.evaluate(data)
     print("p is ", ls.p)
     to_log_eval(med_flips, mean_flips, accuracy, "TEST", True)
